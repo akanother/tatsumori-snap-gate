@@ -7,6 +7,8 @@ use App\Http\Controllers\Ingest\UploadController;
 use App\Http\Middleware\EnsureIngestRoom;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken as Csrf;
 
+//画面を描写
+
 // 署名URLの着地点（無保護）
 Route::get('/upload', [GateController::class, 'enterFromQuery'])->name('gate.enter.query');
 
