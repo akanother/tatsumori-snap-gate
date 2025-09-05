@@ -2,7 +2,7 @@
 
 // config/ingest.php
 return [
-    'b_base_url'          => env('B_BASE_URL', 'https://tatsumori_jet.test'),
+    'b_base_url'          => env('B_BASE_URL', 'https://jet.t1.tatsumori.co.jp'),
     'introspect_path'     => env('B_INTROSPECT_PATH', '/api/ingest/introspect'),
     'session_ttl'         => env('INGEST_SESSION_TTL', 30), // 分
     'introspect_insecure' => env('INGEST_INTROSPECT_INSECURE', false),
