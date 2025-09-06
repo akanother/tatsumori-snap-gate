@@ -123,6 +123,7 @@
             <input type="hidden" name="_token" :value="csrfToken"/>
         </form>
 
+        <!-- ==== カメラオーバーレイ ==== -->
         <div v-if="camera.open" class="cam-overlay">
             <div class="cam-toolbar">
                 <button type="button" class="btn btn-light btn-sm" @click="toggleFacing" :disabled="camera.busy">
@@ -136,30 +137,41 @@
             <video ref="videoRef" class="cam-video" autoplay playsinline muted></video>
 
             <div class="cam-bottom">
-                <button type="button" class="btn btn-primary btn-lg cam-shutter" :disabled="camera.busy" @click="shoot">
+                <button type="button" class="btn btn-primary btn-lg cam-shutter"
+                        :disabled="camera.busy || ui.shutterLock"
+                        @click="shoot">
                     <i class="fas fa-dot-circle me-2"></i> 撮影
                 </button>
             </div>
+
+            <!-- フラッシュ（白フェード） -->
+            <div class="flash" :class="{ active: ui.flash }"></div>
+            <!-- 撮影マーク（中央） -->
+            <div class="shot-mark" v-if="ui.shotMark">
+                <i class="fas fa-check-circle me-2"></i> 撮影しました
+            </div>
+            <!-- アクセシビリティ：ライブリージョン -->
+            <div class="sr-only" aria-live="polite" ref="liveRegion"></div>
         </div>
     </div>
 </template>
 
 <script>
-import {Head} from '@inertiajs/vue3'
+import { Head } from '@inertiajs/vue3'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 
 export default {
     name: 'Capture',
-    components: {Head},
+    components: { Head },
     props: {
-        roomCode: {type: String, default: ''},
-        maxFiles: {type: Number, default: 10},
-        maxMB: {type: Number, default: 20},
-        uploadUrl: {type: String, required: true},
-        logoutUrl: {type: String, required: true},
-        expiresAt: {type: String, default: null},
-        csrfToken: {type: String, required: true},
+        roomCode: { type: String, default: '' },
+        maxFiles: { type: Number, default: 10 },
+        maxMB: { type: Number, default: 20 },
+        uploadUrl: { type: String, required: true },
+        logoutUrl: { type: String, required: true },
+        expiresAt: { type: String, default: null },
+        csrfToken: { type: String, required: true },
     },
     data() {
         return {
@@ -167,8 +179,11 @@ export default {
             uploading: false,
             progress: 0,
             result: null,
-            camera: {open: false, facing: 'environment', busy: false, stream: null},
+            camera: { open: false, facing: 'environment', busy: false, stream: null },
             pingTimer: null,
+            // ▼ 追加：UI & Audio 状態
+            ui: { flash: false, shotMark: false, shutterLock: false },
+            audio: { ctx: null, unlocked: false },
         }
     },
     computed: {
@@ -201,15 +216,16 @@ export default {
         // keep-alive ping（セッション延命）
         this.pingTimer = setInterval(async () => {
             try {
-                await fetch('/gate/ping', {method: 'GET', credentials: 'same-origin', cache: 'no-store'})
-            } catch (_) {
-            }
+                await fetch('/gate/ping', { method: 'GET', credentials: 'same-origin', cache: 'no-store' })
+            } catch (_) {}
         }, 60000)
     },
     beforeUnmount() {
         if (this.pingTimer) clearInterval(this.pingTimer)
         this.files.forEach(f => f.url && URL.revokeObjectURL(f.url))
         this.closeCamera()
+        // AudioContext のクリーンアップ（任意）
+        try { this.audio?.ctx?.close?.() } catch {}
     },
     methods: {
         async onPick(e) {
@@ -226,7 +242,7 @@ export default {
         },
         pushFile(blob, originalName) {
             const name = this.safeName(originalName, 'jpg')
-            const file = new File([blob], name, {type: blob.type || 'image/jpeg'})
+            const file = new File([blob], name, { type: blob.type || 'image/jpeg' })
             const previewable = /image\/(jpeg|png|webp)/.test(file.type)
             const tooBig = file.size > this.maxBytes
             this.files.push({
@@ -242,15 +258,15 @@ export default {
         },
         clearAll() {
             this.files.forEach(f => f.url && URL.revokeObjectURL(f.url))
-            this.files = [];
-            this.result = null;
+            this.files = []
+            this.result = null
             this.progress = 0
         },
 
         async upload() {
             if (!this.okToUpload || this.uploading) return
-            this.uploading = true;
-            this.progress = 0;
+            this.uploading = true
+            this.progress = 0
             this.result = null
 
             const fd = new FormData()
@@ -269,7 +285,6 @@ export default {
                 const count = this.result?.count ?? this.files.length
                 this.clearAll()
 
-                // ✅ 成功ポップ
                 await Swal.fire({
                     icon: 'success',
                     title: 'アップロード完了',
@@ -278,7 +293,6 @@ export default {
                 })
             } catch (e) {
                 console.error(e)
-                // ❌ 失敗ポップ
                 Swal.fire({
                     icon: 'error',
                     title: 'アップロードに失敗しました',
@@ -286,7 +300,7 @@ export default {
                     confirmButtonText: '閉じる',
                 })
             } finally {
-                this.uploading = false;
+                this.uploading = false
                 this.progress = 0
             }
         },
@@ -311,19 +325,12 @@ export default {
         },
 
         async safeJson(res) {
-            try {
-                return await res.json()
-            } catch {
-                return null
-            }
+            try { return await res.json() } catch { return null }
         },
 
         onLogoutClick() {
             if (confirm('退出するとこのセッションは終了します。よろしいですか？')) {
-                try {
-                    history.replaceState(null, '', '/gate/ended')
-                } catch {
-                }
+                try { history.replaceState(null, '', '/gate/ended') } catch {}
                 this.$refs.logoutForm.submit()
             }
         },
@@ -337,78 +344,150 @@ export default {
                 timer: 1800,
                 timerProgressBar: true,
             })
-            return Toast.fire({icon, title: message})
+            return Toast.fire({ icon, title: message })
         },
 
+        // =========================
         // カメラ & 画像処理
+        // =========================
+        async ensureAudioUnlocked() {
+            if (this.audio.unlocked) return
+            try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext
+                if (!AudioCtx) return
+                this.audio.ctx = new AudioCtx()
+                // iOS対策：極小音でアンロック
+                const o = this.audio.ctx.createOscillator()
+                const g = this.audio.ctx.createGain()
+                g.gain.value = 0.0001
+                o.connect(g).connect(this.audio.ctx.destination)
+                o.start()
+                o.stop(this.audio.ctx.currentTime + 0.02)
+                this.audio.unlocked = true
+            } catch (_) {}
+        },
+        playShutter() {
+            if (!this.audio?.ctx) return
+            const ctx = this.audio.ctx
+            const now = ctx.currentTime
+            const makePing = (freq, start, dur, gain = 0.15) => {
+                const o = ctx.createOscillator()
+                const g = ctx.createGain()
+                o.type = 'square'
+                o.frequency.setValueAtTime(freq, now + start)
+                g.gain.setValueAtTime(0.0001, now + start)
+                g.gain.exponentialRampToValueAtTime(gain, now + start + 0.01)
+                g.gain.exponentialRampToValueAtTime(0.0001, now + start + dur)
+                o.connect(g).connect(ctx.destination)
+                o.start(now + start)
+                o.stop(now + start + dur + 0.02)
+            }
+            makePing(1800, 0.00, 0.06) // ピッ
+            makePing(900,  0.05, 0.08) // コッ
+        },
+        triggerFlash() {
+            this.ui.flash = true
+            setTimeout(() => (this.ui.flash = false), 120)
+        },
+        showShotMark() {
+            this.ui.shotMark = true
+            setTimeout(() => (this.ui.shotMark = false), 600)
+        },
+        announce(msg) {
+            if (this.$refs.liveRegion) this.$refs.liveRegion.textContent = msg
+        },
+
         async openCamera() {
             if (!navigator.mediaDevices?.getUserMedia) {
-                Swal.fire({icon: 'info', title: 'カメラ非対応', text: '写真の選択をご利用ください。'})
+                Swal.fire({ icon: 'info', title: 'カメラ非対応', text: '写真の選択をご利用ください。' })
                 return
             }
             try {
                 this.camera.busy = true
+                await this.ensureAudioUnlocked() // ユーザー操作直後にアンロック
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: {facingMode: this.camera.facing, width: {ideal: 1920}, height: {ideal: 1080}}, audio: false
+                    video: { facingMode: this.camera.facing, width: { ideal: 1920 }, height: { ideal: 1080 } },
+                    audio: false
                 })
-                this.camera.stream = stream;
-                this.camera.open = true;
+                this.camera.stream = stream
+                this.camera.open = true
                 await this.$nextTick()
-                const video = this.$refs.videoRef;
-                video.srcObject = stream;
+                const video = this.$refs.videoRef
+                video.srcObject = stream
                 await video.play()
+                this.announce('カメラを起動しました')
             } catch (e) {
                 console.error(e)
-                Swal.fire({icon: 'error', title: 'カメラを起動できません', text: '権限設定をご確認ください。'})
+                Swal.fire({ icon: 'error', title: 'カメラを起動できません', text: '権限設定をご確認ください。' })
             } finally {
                 this.camera.busy = false
             }
         },
         async closeCamera() {
             if (this.camera.stream) {
-                this.camera.stream.getTracks().forEach(t => t.stop());
+                this.camera.stream.getTracks().forEach(t => t.stop())
                 this.camera.stream = null
             }
             this.camera.open = false
         },
         async toggleFacing() {
-            this.camera.facing = this.camera.facing === 'environment' ? 'user' : 'environment';
-            await this.closeCamera();
+            this.camera.facing = this.camera.facing === 'environment' ? 'user' : 'environment'
+            await this.closeCamera()
             await this.openCamera()
         },
         async shoot() {
-            if (!this.camera.open) return
-            const video = this.$refs.videoRef
-            const w = video.videoWidth || 1280, h = video.videoHeight || 720
-            const canvas = document.createElement('canvas')
-            const {tw, th} = this.fitWithin(w, h, 2000, 2000)
-            canvas.width = tw;
-            canvas.height = th
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0, tw, th)
-            let quality = 0.92
-            let blob = await this.canvasToBlob(canvas, 'image/jpeg', quality)
-            while (blob.size > this.maxBytes && quality > 0.5) {
-                quality -= 0.08;
-                blob = await this.canvasToBlob(canvas, 'image/jpeg', quality)
+            if (!this.camera.open || this.ui.shutterLock) return
+            this.ui.shutterLock = true
+            this.camera.busy = true
+            try {
+                // 1) 体験：フラッシュ／バイブ／音
+                this.triggerFlash()
+                if (navigator.vibrate) navigator.vibrate(35)
+                this.playShutter()
+
+                // 2) 撮影ロジック
+                const video = this.$refs.videoRef
+                const w = video.videoWidth || 1280, h = video.videoHeight || 720
+                const canvas = document.createElement('canvas')
+                const { tw, th } = this.fitWithin(w, h, 2000, 2000)
+                canvas.width = tw; canvas.height = th
+                const ctx = canvas.getContext('2d')
+                ctx.drawImage(video, 0, 0, tw, th)
+
+                let quality = 0.92
+                let blob = await this.canvasToBlob(canvas, 'image/jpeg', quality)
+                while (blob.size > this.maxBytes && quality > 0.5) {
+                    quality -= 0.08
+                    blob = await this.canvasToBlob(canvas, 'image/jpeg', quality)
+                }
+                const name = `camera_${this.ts()}_${Math.random().toString(36).slice(2, 8)}.jpg`
+                this.pushFile(blob, name)
+
+                // 3) 視覚 & SR
+                this.showShotMark()
+                this.announce('撮影しました')
+                this.toast('撮影しました')
+            } catch (e) {
+                console.error(e)
+                Swal.fire({ icon: 'error', title: '撮影に失敗しました', text: 'もう一度お試しください。' })
+            } finally {
+                this.camera.busy = false
+                setTimeout(() => (this.ui.shutterLock = false), 350) // 連写抑制
             }
-            const name = `camera_${this.ts()}_${Math.random().toString(36).slice(2, 8)}.jpg`
-            this.pushFile(blob, name)
-            this.toast('撮影しました')
         },
 
         // ユーティリティ
         safeName(original, fallbackExt = 'jpg') {
-            const clean = (original || '').replace(/[^\w.\-]+/g, '_');
+            const clean = (original || '').replace(/[^\w.\-]+/g, '_')
             return clean || `image_${this.ts()}.${fallbackExt}`
         },
         ts() {
-            const d = new Date(), p = n => String(n).padStart(2, '0');
+            const d = new Date(), p = n => String(n).padStart(2, '0')
             return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`
         },
         fitWithin(w, h, mw, mh) {
-            const r = Math.min(mw / w, mh / h, 1);
-            return {tw: Math.round(w * r), th: Math.round(h * r)}
+            const r = Math.min(mw / w, mh / h, 1)
+            return { tw: Math.round(w * r), th: Math.round(h * r) }
         },
         canvasToBlob(canvas, type, quality) {
             return new Promise(res => canvas.toBlob(b => res(b), type, quality))
@@ -417,36 +496,35 @@ export default {
             if (/image\/(heic|heif)/i.test(file.type)) return file
             try {
                 const img = await this.readImage(file)
-                const {tw, th} = this.fitWithin(img.width, img.height, 2000, 2000)
-                const canvas = document.createElement('canvas');
-                canvas.width = tw;
-                canvas.height = th
-                const ctx = canvas.getContext('2d');
+                const { tw, th } = this.fitWithin(img.width, img.height, 2000, 2000)
+                const canvas = document.createElement('canvas')
+                canvas.width = tw; canvas.height = th
+                const ctx = canvas.getContext('2d')
                 ctx.drawImage(img, 0, 0, tw, th)
-                let quality = 0.92;
+                let quality = 0.92
                 let blob = await this.canvasToBlob(canvas, 'image/jpeg', quality)
                 while (blob.size > this.maxBytes && quality > 0.5) {
-                    quality -= 0.08;
+                    quality -= 0.08
                     blob = await this.canvasToBlob(canvas, 'image/jpeg', quality)
                 }
                 return blob
             } catch (e) {
-                console.warn('compress failed, use original', e);
+                console.warn('compress failed, use original', e)
                 return file
             }
         },
         readImage(file) {
             return new Promise((resolve, reject) => {
-                const url = URL.createObjectURL(file);
-                const img = new Image();
+                const url = URL.createObjectURL(file)
+                const img = new Image()
                 img.onload = () => {
-                    URL.revokeObjectURL(url);
+                    URL.revokeObjectURL(url)
                     resolve(img)
-                };
+                }
                 img.onerror = e => {
-                    URL.revokeObjectURL(url);
+                    URL.revokeObjectURL(url)
                     reject(e)
-                };
+                }
                 img.src = url
             })
         },
@@ -564,5 +642,40 @@ html, body {
 .cam-shutter {
     min-width: 220px;
     box-shadow: 0 8px 22px rgba(0, 0, 0, .35);
+}
+
+/* 白フラッシュ */
+.flash {
+    position: fixed;
+    inset: 0;
+    background: #fff;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 10000;
+    transition: opacity 120ms ease;
+}
+.flash.active { opacity: 0.9; }
+
+/* 撮影マーク（中央） */
+.shot-mark {
+    position: fixed;
+    left: 50%;
+    top: 40%;
+    transform: translate(-50%, -50%);
+    background: rgba(0,0,0,.65);
+    color: #fff;
+    padding: .6rem 1rem;
+    border-radius: 9999px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    z-index: 10001;
+    backdrop-filter: blur(2px);
+}
+
+/* iOS等の見た目安定化 */
+.cam-shutter:disabled {
+    opacity: .7;
+    cursor: not-allowed;
 }
 </style>
