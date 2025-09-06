@@ -14,6 +14,33 @@
                 この招待は <strong>{{ humanExp }}</strong> まで有効です
             </div>
 
+            <!--<div v-if="uploading" class="mb-3">-->
+            <!--    <div class="progress" style="height: 10px;">-->
+            <!--        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"-->
+            <!--             :style="{ width: progress + '%' }" :aria-valuenow="progress" aria-valuemin="0"-->
+            <!--             aria-valuemax="100"></div>-->
+            <!--    </div>-->
+            <!--    <div class="d-flex justify-content-between mt-2 small text-muted">-->
+            <!--        <span>アップロード中…</span><span>{{ progress }}%</span>-->
+            <!--    </div>-->
+            <!--</div>-->
+            <!-- ★ アップロード中プログレスをここに移動 -->
+            <div v-if="uploading" class="upload-progress-wrap mb-3">
+                <div class="progress">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated"
+                         role="progressbar"
+                         :style="{ width: progress + '%' }"
+                         :aria-valuenow="progress"
+                         aria-valuemin="0"
+                         aria-valuemax="100"></div>
+                </div>
+                <div class="d-flex justify-content-between mt-1 small text-muted">
+                    <span>アップロード中…</span>
+                    <span>{{ progress }}%</span>
+                </div>
+            </div>
+
+
             <div class="card mb-3">
                 <div class="card-body py-3">
                     <p class="mb-2 small text-muted">カメラで撮影するか、端末の写真から選択してください。</p>
@@ -81,16 +108,7 @@
                 </div>
             </div>
 
-            <div v-if="uploading" class="mb-3">
-                <div class="progress" style="height: 10px;">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"
-                         :style="{ width: progress + '%' }" :aria-valuenow="progress" aria-valuemin="0"
-                         aria-valuemax="100"></div>
-                </div>
-                <div class="d-flex justify-content-between mt-2 small text-muted">
-                    <span>アップロード中…</span><span>{{ progress }}%</span>
-                </div>
-            </div>
+
 
             <div v-if="result" class="card mb-5">
                 <div class="card-body">
@@ -677,5 +695,19 @@ html, body {
 .cam-shutter:disabled {
     opacity: .7;
     cursor: not-allowed;
+}
+
+/* アップロードプログレスをカード群の上に固定表示 */
+.upload-progress-wrap {
+    position: sticky;
+    top: 60px; /* ヘッダー高さ分 */
+    z-index: 50;
+    background: #f8fafc;
+    padding: 8px 0;
+}
+
+.upload-progress-wrap .progress {
+    height: 14px;
+    border-radius: 8px;
 }
 </style>
