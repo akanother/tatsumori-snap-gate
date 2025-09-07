@@ -3,11 +3,18 @@
 namespace App\Services;
 
 use Exception;
+use Illuminate\Support\Facades\Log;
 
 class ClamAvService
 {
     public function scan(string $filePath): array
     {
+        Log::info('ClamAV Connect Debug', [
+            'socket' => config('clamav.socket'),
+            'host'   => config('clamav.host'),
+            'port'   => config('clamav.port'),
+        ]);
+
         if (!is_readable($filePath)) {
             throw new Exception("file not readable: {$filePath}");
         }
