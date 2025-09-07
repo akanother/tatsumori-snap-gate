@@ -39,7 +39,8 @@ class ClamAvService
 
         stream_set_timeout($fp, $timeout);
         // INSTREAM モード
-        fwrite($fp, "nINSTREAM\n");
+        fwrite($fp, "INSTREAM\n");
+
 
         $h = fopen($filePath, 'rb');
         if (!$h) {
