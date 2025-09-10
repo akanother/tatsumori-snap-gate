@@ -60,8 +60,9 @@
 
                     <label class="btn btn-primary btn-lg py-3 w-100 mb-0">
                         <i class="fas fa-camera me-2"></i> 写真を選択（端末）
-                        <input ref="fileInput" type="file" class="d-none"
-                               accept="image/*" capture="environment" multiple @change="onPick"/>
+<!--                        <input ref="fileInput" type="file" class="d-none"-->
+<!--                               accept="image/*" capture="environment" multiple @change="onPick"/>-->
+                        <input ref="fileInput" type="file" class="d-none" accept="image/*" multiple @change="onPick"/>
                     </label>
                 </div>
             </div>
