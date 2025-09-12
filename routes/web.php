@@ -1,13 +1,12 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken as Csrf;
+use App\Http\Middleware\EnsureIngestRoom;
 use App\Http\Controllers\Ingest\GateController;
 use App\Http\Controllers\Ingest\UploadController;
-use App\Http\Middleware\EnsureIngestRoom;
-use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken as Csrf;
-
-//画面を描写
+use App\Http\Controllers\ShareFileRoom\DownloadController;
 
 //*******************************************************************
 //
@@ -40,3 +39,15 @@ Route::get('/gate/ended', fn() => Inertia::render('Ended', [
 // Snap Gate Share File Downloader
 //
 //*******************************************************************
+ Route::prefix('r')->name('r.')->group(function () {
+     Route::get('/{token}', [DownloadController::class, 'showRoom'])->name('room.show');
+     Route::post('/verify', [DownloadController::class, 'verifyPassword'])->name('room.verify');
+
+     // ファイル一覧取得 (Dropbox直)
+     Route::get('/files/{token}', [DownloadController::class, 'listFiles'])->name('files.list');
+
+     // ファイルダウンロード
+     Route::post('/f/{fileId}', [DownloadController::class, 'downloadFile'])->name('file.download');
+     // ★ ZIP一括ダウンロード
+     Route::post('/zip/{token}', [DownloadController::class, 'downloadZip'])->name('files.zip');
+ });
