@@ -9,6 +9,11 @@ use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken as Csrf;
 
 //画面を描写
 
+//*******************************************************************
+//
+// Snap Gate Photo Uploader
+//
+//*******************************************************************
 // 署名URLの着地点（無保護）
 Route::get('/upload', [GateController::class, 'enterFromQuery'])->name('gate.enter.query');
 
@@ -28,3 +33,10 @@ Route::prefix('gate')->name('gate.')->group(function () {
 Route::get('/gate/ended', fn() => Inertia::render('Ended', [
     'message' => 'アップロードセッションは終了しました。再開するには新しい招待リンクからアクセスしてください。',
 ]))->name('gate.ended');
+
+
+//*******************************************************************
+//
+// Snap Gate Share File Downloader
+//
+//*******************************************************************
