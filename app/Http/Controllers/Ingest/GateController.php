@@ -12,8 +12,10 @@ class GateController extends Controller
 {
     public function enterFromQuery(Request $request)
     {
+
         $token = (string) $request->query('token', '');
         $nonce = (string) ($request->query('n', '') ?: $request->query('nonce', ''));
+
         if ($token === '' || $nonce === '') {
             abort(400, 'missing token or nonce');
         }
